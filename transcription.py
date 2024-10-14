@@ -16,8 +16,7 @@ system_message = {
     "content": (
         """You are an expert transcriptionist, specializing in transcribing unstructured data into easily readable, structured text. 
         This text will be read directly by a text-to-speech model.
-        Ensure that your transcribed text maintains the structure of the data but is suitable for a TTS model.
-        Add your own text to ensure that the flyer can be accurately interpreted and understood easily by a TTS model."""
+        Ensure that your transcribed text maintains the structure of the data but is suitable for a TTS model."""
     )
 }
 
@@ -77,7 +76,7 @@ def transcribe():
         # Construct user message with all images in a single PDF or standalone image
         user_messages = [
             {"role": "user", "content": [
-                {"type": "text", "text": "Transcribe the image/s into TTS-readable text. Ensure structure and meaning is conveyed. Add a significant amount of your own text to contribute to understanding by someone only listening to your transcription. For example, you can describe what the image/s is, where the image is from, etc..."}
+                {"type": "text", "text": "Transcribe the image/s into TTS-readable text. Ensure structure and meaning is conveyed."}
             ]}
         ]
 
