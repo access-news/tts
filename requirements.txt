@@ -2,3 +2,5 @@ openai
 python-dotenv
 pdf2image
 pillow
+beautifulsoup4
+selenium

@@ -4,3 +4,4 @@ input/*
 output/*
 __pycache__
 .DS_Store
+flyers/target_weekly_ad/*
