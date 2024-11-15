@@ -174,3 +174,116 @@ webdriver-manager update
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## API Documentation
+
+### Endpoints
+
+#### Convert Files to Speech
+`POST /convert`
+
+Converts images or PDFs to speech audio. Accepts file uploads, base64-encoded data, or URLs.
+
+**Request Body:**
+- Multipart form data with file upload:
+  ```
+  file: [binary file data]
+  ```
+- OR JSON with base64 data:
+  ```
+  {
+    "base64": "base64_encoded_string"
+  }
+  ```
+- OR JSON with URL:
+  ```
+  {
+    "url": "https://example.com/image.jpg"
+  }
+  ```
+
+**Supported File Types:**
+- Images: .png, .jpg, .jpeg
+- Documents: .pdf
+
+**Response:**
+```
+{
+    "audio": "base64_encoded_audio",
+    "message": "Conversion successful"
+}
+```
+
+**Error Response:**
+```
+{
+    "error": "Error message description"
+}
+```
+
+**Status Codes:**
+- 200: Success
+- 400: Bad request (invalid file type, missing file)
+- 500: Server error
+
+#### Fetch Target Weekly Ads
+`GET /fetch-target-ads`
+
+Fetches the latest Target weekly advertisements, processes them, and returns base64-encoded audio for each ad.
+
+**Response:**
+```
+{
+    "message": "Target ads fetched and processed successfully",
+    "date": "20240320",
+    "audio_files": [
+        {
+            "filename": "target_ad_1.jpg",
+            "audio": "base64_encoded_audio_string"
+        },
+        {
+            "filename": "target_ad_2.jpg",
+            "audio": "base64_encoded_audio_string"
+        }
+        // ... more files
+    ]
+}
+```
+
+**Error Response:**
+```
+{
+    "error": "Error message description"
+}
+```
+
+**Status Codes:**
+- 200: Success
+- 404: No ads found
+- 500: Server error
+
+### Example Usage
+
+**Converting a File:**
+```bash
+curl -X POST -F "file=@image.png" http://127.0.0.1:5000/convert
+```
+
+**Converting from URL:**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"url":"https://example.com/image.jpg"}' \
+     http://127.0.0.1:5000/convert
+```
+
+**Converting Base64 Data:**
+```bash
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"base64":"base64_encoded_string"}' \
+     http://127.0.0.1:5000/convert
+```
+
+**Fetching Target Ads:**
+```bash
+curl http://127.0.0.1:5000/fetch-target-ads
+```

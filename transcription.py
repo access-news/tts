@@ -1,9 +1,14 @@
-from transcription import transcribe
-from openai import OpenAI
+# transcription.py
+
+from openai import OpenAI, OpenAIError
 from pathlib import Path
 import os
 import logging
 import time
+from PIL import Image
+from pdf2image import convert_from_path
+import base64
+from io import BytesIO
 
 # Configure logging
 logging.basicConfig(
@@ -15,118 +20,100 @@ logger = logging.getLogger(__name__)
 # Initialize the OpenAI client
 client = OpenAI()
 
-# Define folder names
-INPUT_FOLDER_NAME = "input"
-OUTPUT_FOLDER_NAME = "output"
-FLYERS_FOLDER_NAME = "flyers"
+system_message = {
+    "role": "system",
+    "content": (
+        """You are an expert transcriptionist, specializing in transcribing unstructured data into easily readable, structured text. 
+        This text will be read directly by a text-to-speech model.
+        Ensure that your transcribed text maintains the structure of the data but is suitable for a TTS model."""
+    )
+}
 
-def list_flyer_directories():
-    """List all available flyer directories"""
-    logger.info("Scanning for flyer directories")
-    if not os.path.exists(FLYERS_FOLDER_NAME):
-        logger.warning(f"Flyers folder '{FLYERS_FOLDER_NAME}' does not exist")
-        return []
-    
-    flyer_dirs = [d for d in os.listdir(FLYERS_FOLDER_NAME) 
-                 if os.path.isdir(os.path.join(FLYERS_FOLDER_NAME, d))]
-    logger.info(f"Found {len(flyer_dirs)} flyer directories: {flyer_dirs}")
-    return flyer_dirs
+def pdf_to_base64_images(pdf_path):
+    # Convert PDF to a list of images
+    images = convert_from_path(pdf_path)
 
-def list_date_directories(flyer_type):
-    """List all date directories for a specific flyer type"""
-    logger.info(f"Scanning for date directories in {flyer_type}")
-    flyer_path = os.path.join(FLYERS_FOLDER_NAME, flyer_type)
-    if not os.path.exists(flyer_path):
-        logger.warning(f"Flyer path '{flyer_path}' does not exist")
-        return []
-    
-    date_dirs = [d for d in os.listdir(flyer_path) 
-                if os.path.isdir(os.path.join(flyer_path, d))]
-    logger.info(f"Found {len(date_dirs)} date directories: {date_dirs}")
-    return sorted(date_dirs, reverse=True)
+    # Store base64 encoded images in a list
+    base64_images = []
 
-def get_images_from_folder(folder_path):
-    """Get all image files from a folder"""
-    logger.info(f"Scanning for images in {folder_path}")
-    image_extensions = ('.png', '.jpg', '.jpeg')
-    images = [f for f in os.listdir(folder_path) 
-             if f.lower().endswith(image_extensions)]
-    logger.info(f"Found {len(images)} images: {images}")
-    return images
+    for image in images:
+        # Save the image in memory as a BytesIO object
+        buffered = BytesIO()
+        image.save(buffered, format="PNG")  # Save image as PNG format
 
-def process_files(input_path, is_flyer=False):
-    """Process files from the specified input path"""
-    logger.info(f"Processing files from {input_path}")
-    start_time = time.time()
-    
-    # Ensure the output folder exists
-    os.makedirs(OUTPUT_FOLDER_NAME, exist_ok=True)
-    
-    # Get input files
-    if is_flyer:
-        input_files = get_images_from_folder(input_path)
-    else:
-        input_files = [f for f in os.listdir(input_path) 
-                      if f.lower().endswith(('.pdf', '.png', '.jpg', '.jpeg'))]
-    
-    if not input_files:
-        logger.warning("No valid input files found!")
-        return
-    
-    logger.info(f"Starting transcription for {len(input_files)} files")
-    try:
-        transcriptions = transcribe(input_path)
-        logger.info(f"Received {len(transcriptions)} transcriptions")
-    except Exception as e:
-        logger.error(f"Transcription failed: {str(e)}", exc_info=True)
-        return
-    
-    # Process each transcription
-    for idx, (transcription, input_file) in enumerate(zip(transcriptions, input_files), 1):
-        logger.info(f"Processing file {idx}/{len(input_files)}: {input_file}")
-        output_filename = os.path.splitext(input_file)[0] + ".mp3"
-        output_path = Path(OUTPUT_FOLDER_NAME) / output_filename
-        
+        # Convert the image to base64
+        img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+        # Append the base64 string of the image to the list
+        base64_images.append(img_base64)
+
+    return base64_images
+
+def image_to_base64(image_path):
+    # Open the image file
+    with Image.open(image_path) as img:
+        # Convert the image to a byte array in PNG format
+        buffered = BytesIO()
+        img.save(buffered, format="PNG")
+
+        # Encode the byte array to base64
+        img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+    return img_base64
+
+def transcribe(input_path):
+    transcriptions = []  # Array to hold all transcription results
+    base64_urls = []
+
+    # Traverse through each file in the input folder
+    for filename in os.listdir(input_path):
+        file_path = os.path.join(input_path, filename)
+
+        if filename.endswith(".pdf"):
+            # Convert PDF to base64 images
+            base64_images = pdf_to_base64_images(file_path)
+            base64_urls.append(base64_images)  # Add as a list of images
+        elif filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+            # Convert image to base64
+            base64_image = image_to_base64(file_path)
+            base64_urls.append([base64_image])  # Add as a list with one image
+
+    # Initialize the system message for each request
+    for base64_image_list in base64_urls:
+        messages = [system_message]  # Start with system message
+
+        # Construct user message with all images in a single PDF or standalone image
+        user_messages = [
+            {"role": "user", "content": [
+                {"type": "text", "text": "Transcribe the image/s into TTS-readable text. Ensure structure and meaning is conveyed."}
+            ]}
+        ]
+
+        for image_base64 in base64_image_list:
+            user_messages[0]["content"].append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/png;base64,{image_base64}",
+                }
+            })
+
+        # Add the user messages to the conversation
+        messages.extend(user_messages)
+
         try:
-            logger.info(f"Generating speech for {input_file}")
-            response = client.audio.speech.create(
-                model="tts-1",
-                voice="nova",
-                input=transcription
+            # Send the message to the GPT model
+            completion = client.chat.completions.create(
+                model="gpt-4o",
+                temperature=0,
+                messages=messages,
             )
-            
-            logger.info(f"Saving audio to {output_path}")
-            response.stream_to_file(output_path)
-            logger.info(f"Successfully generated audio file: {output_path}")
-        except Exception as e:
-            logger.error(f"Error generating audio for {input_file}: {str(e)}", exc_info=True)
-    
-    elapsed_time = time.time() - start_time
-    logger.info(f"Processing completed in {elapsed_time:.2f} seconds")
+            # Get the transcription result
+            transcription_result = completion.choices[0].message.content
+            # Add the result to the transcriptions array
+            transcriptions.append(transcription_result)
 
-def main():
-    logger.info("Starting application")
-    
-    choice = select_input_source()
-    
-    if choice == '1':
-        logger.info("Processing from regular input folder")
-        process_files(INPUT_FOLDER_NAME)
-    else:
-        logger.info("Processing from flyers directory")
-        flyer_type = select_flyer_directory()
-        if not flyer_type:
-            logger.error("No flyer type selected")
-            return
-        
-        date_dir = select_date_directory(flyer_type)
-        if not date_dir:
-            logger.error("No date directory selected")
-            return
-        
-        flyer_path = os.path.join(FLYERS_FOLDER_NAME, flyer_type, date_dir)
-        logger.info(f"Processing flyer path: {flyer_path}")
-        process_files(flyer_path, is_flyer=True)
+        except OpenAIError as e:
+            logger.error(f"Error in transcription: {e}")
+            transcriptions.append(f"Error in transcription")
 
-if __name__ == "__main__":
-    main()
+    return transcriptions

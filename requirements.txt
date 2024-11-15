@@ -4,3 +4,5 @@ pdf2image
 pillow
 beautifulsoup4
 selenium
+flask
+requests
