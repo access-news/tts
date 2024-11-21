@@ -31,6 +31,11 @@ cd tts
 pip install -r requirements.txt
 ```
 
+or, using [Nix](https://nixos.org/)'s [`nix-shell`](https://nix.dev/manual/nix/2.18/command-ref/nix-shell):
+```
+nix-shell shell.nix
+```
+
 3. Install Selenium and WebDriver dependencies:
 
 For Chrome:
